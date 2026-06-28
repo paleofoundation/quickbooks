@@ -1,0 +1,10 @@
+# Pinned to lower bounds known to work on macOS system Python 3.9+.
+# Install via ./setup.sh (creates a local venv) — do not rely on system site-packages.
+pandas>=2.0,<2.3
+openpyxl>=3.1
+xlrd>=2.0            # reading legacy QBO .xls register exports
+numbers-parser>=4.4 # reading Apple .numbers working files
+pyyaml>=6.0
+python-docx>=1.1    # generating the findings memo (.docx)
+# Note: statement PDFs are kept for humans only (they don't parse reliably); real month-end
+# balances come from statement_balances.csv / entities.yaml, so no PDF library is required.

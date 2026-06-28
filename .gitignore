@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.~lock*
+.DS_Store
+venv/
+.venv/
+*.egg-info/
+
+# generated close outputs
+close_*/
+close_summary.json
+tools/drift_logs/
+
+# real financial fixtures — kept local only, never pushed
+tests/fixtures/st_gertrude_2025/

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Monthly drift-check schedule for macOS launchd. READ-ONLY; runs the 1st of each month at 9am.
+     Install:  see tools/README.md  (edit the two ABSOLUTE paths below first). -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nonprofitclose.driftcheck</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kimberlyeyer/Desktop/nonprofit-close-reconciliation/tools/monthly_drift.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key><integer>1</integer>
+        <key>Hour</key><integer>9</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/kimberlyeyer/Desktop/nonprofit-close-reconciliation/tools/drift_logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kimberlyeyer/Desktop/nonprofit-close-reconciliation/tools/drift_logs/launchd.err.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

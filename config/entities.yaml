@@ -1,0 +1,176 @@
+# ============================================================================
+# Entity reference data for the close reconciliation.
+# This file is the single source of truth the scripts READ. Edit once per year
+# (or when accounts change) so facts are not re-derived every run.
+#
+# NOTHING here authorizes editing QuickBooks. The skill READS QBO exports and
+# PRODUCES worksheets/memos only; a human (Leigh Ann) executes every mutation.
+# ============================================================================
+
+defaults:
+  currency: USD
+  close_tolerance: 1.00          # net-income / cross-foot tie-out tolerance (USD)
+  phantom_alert_threshold: 500   # monthly drift alert threshold (USD)
+  # Duplicate pairing tolerances. Re-keyed duplicates are NOT penny-identical
+  # (they were re-entered at EUR x FX), so matching is fuzzy by design.
+  # An exact-amount test found only 3 of ~195 duplicates — never match on exact amount.
+  duplicate_match:
+    date_window_days: 8          # |bookdate - feeddate| <= this
+    amount_pct: 0.06             # |a-b| <= max(amount_abs, amount_pct * feed_amount)
+    amount_abs: 3.00
+    payee_min_similarity: 0.30   # Jaccard token overlap of payee/memo
+
+# ----------------------------------------------------------------------------
+entities:
+
+  st_gertrude:
+    legal_name: "Gardens of St. Gertrude, Inc."
+    type: "501(c)(3)"
+    ein: "<fill in>"
+    qbo_realm: "<fill in — St. Gertrude realm>"
+    funding_model: break_even      # contributions are sized to equal expenses -> target net = 0
+    net_income_target: 0
+
+    funders:
+      - name: "Certified Paleo, Inc. (Paleo Foundation)"
+        role: primary
+        income_account: "Paleo's Cont."
+        funds_via: "Chase Cat Checking 1185 (pays the card AutoPay)"
+        note: "AutoPay payoffs are ALREADY captured as 'Paleo's Cont.' income — do NOT re-book them as a separate contribution."
+      - name: "Karen Pendergrass (owner)"
+        role: owner_in_kind
+        source_accounts: ["BOC Karen (Bank of Cyprus, EUR)", "personal Capital One 1897/6520/8313"]
+        income_account: "Contributed income (other)"
+        treatment: undecided        # contribution vs loan -> TAX ADVISOR decides (Anasheh)
+      - name: "Kimberly Eyer (owner)"
+        role: owner_in_kind
+        source_accounts: ["BOC Kimberly (Bank of Cyprus, EUR)"]
+        income_account: "Contributed income (other)"
+        treatment: undecided
+
+    # Every bank/credit-card account to reconcile. The engine loops over this list;
+    # add an account here, no code change needed.
+    accounts:
+      - label: "Capital One Venture X"
+        real_account: true
+        real_cards: ["7933", "5391"]      # ONE real account, two physical cards
+        qbo_recorded_as_two: true         # ROOT CAUSE: QBO had two accounts for this one card
+        qbo_accounts:
+          - "CC - Capital One Venture X (linked to 5391) 7933"
+          - "CC - Capital One Venture X (linked to 7933) 5391"
+        qbo_register_globs: ["*7933 Register*.xls", "*5391 Register*.xls"]
+        feed_card: "7933"                 # bank-feed entries land here
+        manual_dupe_card: "5391"          # manual re-keyed duplicates accumulate here
+        real_csv_glob: "*7933*transaction_download*.csv"
+        csv_schema: capital_one           # Transaction Date / Debit / Credit (USD)
+        statement_balance_eoy: 12873.77   # real Dec 27 2025 statement balance (the truth)
+        carry_in_prior_year: 7344.61      # 2024 overstatement carried into 2025
+        paid_by: "AutoPay from Chase Cat Checking 1185 (Paleo-funded); paid in full; ~$0 interest; $395 annual fee (March) is legit"
+      - label: "Visa 1044"
+        real_account: true
+        status: dormant                   # reconcile/close separately, do NOT fold into Venture X
+        statement_balance_eoy: 1945.60
+        csv_schema: numbers               # source is Visa 1044.numbers
+        note: "Last real activity Sep 2025."
+      - label: "Capital One personal 1897/6520/8313"
+        belongs_to_org: false             # Karen's PERSONAL card. Cat buys here are owner in-kind, not the org's card.
+        csv_schema: capital_one
+
+    bank_accounts:
+      - "Chase Cat Checking 1185"         # Paleo-funded; pays the AutoPay. STAYS OFF Paleo's books.
+      - "Chase Cat Savings 5398"          # STAYS OFF Paleo's books.
+
+    compliance_profile:
+      regime: us_501c3
+      tax_year: 2025
+      state: FL
+      foreign_accounts: true              # Cyprus owner accounts -> FBAR/FinCEN-114 trigger
+      return_forms: ["990 or 990-EZ (NOT 990-N — over the $50K ceiling)"]
+      filing_deadline: "2026-05-15"       # 15th day of 5th month after year-end
+      revocation_tripwire: "Historically filed 990-N. Wrong form = treated as NOT filing. 3 consecutive years -> automatic revocation. CONFIRM what (if anything) was filed for 2025."
+      gross_receipts_basis: corrected_income      # use CORRECTED (not booked) figures for the tests
+      total_assets_basis: corrected_total_assets
+      signoff_owner: "Anasheh (tax attorney)"
+
+    # What counts as legitimate program (cat-care) expense. Used to flag non-program items.
+    # St. Gertrude ONLY — do not apply to other entities.
+    category_rules:
+      program_expense_legit:
+        vendors: ["M.K. (Limassol) Veterinary / Dr. Markos Ktori", "PET MARKET", "Organic Dog Chef",
+                  "Lucky Pets", "Coralli", "Bwell", "K Melini Pharmacy", "Wolt (cat food delivery)",
+                  "Mr & Mrs Pet", "ALPHAMEGA (cat food)"]
+        item_types: ["vet care", "cat food", "cat litter/supplies", "cat transport", "cremation",
+                     "caregiver", "supplements (lactoferrin, S. boulardii, zinc, activated charcoal)",
+                     "methylene blue (vet-directed, e.g. feline MRSA)"]
+        note: "Supplements & methylene blue ARE legit cat care here (vet-directed). Do NOT flag as personal."
+      non_program_examples:
+        item_types: ["consumer electronics / headphones", "skincare / LED beauty devices",
+                     "books unrelated to animals", "personal rent", "personal subscriptions"]
+
+    controls:
+      expected_users: ["Kimberly Eyer", "Leigh Ann (bookkeeper)", "Anasheh (tax attorney)"]
+      known_unauthorized: ["Alison (logged in AS Kimberly — shared credentials; flag every entry under Kimberly's login during Alison's tenure for review)"]
+      mfa_required: true
+      closed_periods: []                  # add 'YYYY-12-31' once a year is closed; entries dated into a closed period = back-dating flag
+      notes: "Shared-login history means 'who entered this' cannot be trusted from the user field alone — corroborate with the audit log."
+
+  # --------------------------------------------------------------------------
+  # NEXT JOB: the Paleo Foundation redo (2025 AND 2026). Profile is seeded;
+  # fill the per-account globs/balances as exports are gathered. The for_profit
+  # funding_model DISABLES the break-even bridge so the close is NOT forced to $0.
+  # --------------------------------------------------------------------------
+  certified_paleo:
+    legal_name: "Certified Paleo, Inc. (DBA Paleo Foundation)"
+    type: "S-corp"
+    ein: "47-5610964"
+    qbo_realm: "123145847686732"
+    funding_model: for_profit       # real P&L — has a genuine nonzero net
+    net_income_target: null         # do NOT force net=0; the residual is real P/L, not a contribution
+
+    # ~30 real accounts live in the canonical 2025 tree:
+    #   "<...>/2025 Tax Documents/Credit Cards 2025/"
+    # Seeded from the Credit Cards 2026/ folder names; verify card<->schema and fill balances during the redo.
+    accounts:
+      - { label: "AMX 41008",  csv_schema: amx,         qbo_register_globs: ["*41008*Register*.xls"] }
+      - { label: "AMX 42000",  csv_schema: amx,         qbo_register_globs: ["*42000*Register*.xls"] }
+      - { label: "AMX 81002",  csv_schema: amx,         qbo_register_globs: ["*81002*Register*.xls"] }
+      - { label: "AMX 11000",  csv_schema: amx,         qbo_register_globs: ["*11000*Register*.xls"] }
+      - { label: "AMX 91003",  csv_schema: amx,         qbo_register_globs: ["*91003*Register*.xls"] }
+      - { label: "Capital One Business 4167/3859",  csv_schema: capital_one, real_csv_glob: "*3859*transaction_download*.csv" }
+      - { label: "Capital One MicroBiome 3763",     csv_schema: capital_one, real_csv_glob: "*3763*transaction_download*.csv" }
+      - { label: "Capital One Personal 9392/7954",  csv_schema: capital_one, belongs_to_org: false }
+      - { label: "Chase Sapphire Business 1040",    csv_schema: chase }
+      - { label: "Chase Southwest Business 1081",   csv_schema: chase }
+      - { label: "Chase Paleo Checking 0326",       csv_schema: chase }
+      - { label: "Chase Paleo Savings 8916",        csv_schema: chase }
+      - { label: "Wells Fargo Business Checking 5096", csv_schema: wells_fargo }
+      - { label: "Wells Fargo SIGNIFY 0471",        csv_schema: wells_fargo }
+      - { label: "PayPal",                          csv_schema: paypal }
+      # ... add remaining accounts as their exports are gathered.
+
+    compliance_profile:
+      regime: us_s_corp
+      tax_year: 2025                # also run 2026
+      state: FL
+      foreign_accounts: true        # run from Cyprus -> FBAR/FinCEN-114
+      return_forms: ["1120-S", "Schedule K-1", "941", "940", "FL RT-6", "FinCEN 114 (FBAR)"]
+      filing_deadline: "2026-03-15" # 1120-S; extension 7004
+      signoff_owner: "Anasheh (tax attorney)"
+
+    tax_context:
+      payroll: true
+      flags_for_attorney:
+        - "Reasonable officer compensation: ordinary income + distributions but $0 wages -> IRC 162 reclass risk."
+        - "FEIE applied to S-corp K-1 pass-through — aggressive; confirm position."
+        - "FBAR (FinCEN 114) for Cypriot accounts — Karen filed historically, Kimberly did not; confirm each year."
+        - "Shareholder basis & ~$67K beginning stock-basis asymmetry."
+        - "~$128K charitable carryforwards with no current benefit."
+        - "~$6,600 Schedule L drift (QBO vs return)."
+
+    controls:
+      expected_users: ["Kimberly Eyer", "Leigh Ann (bookkeeper)", "Anasheh (tax attorney)"]
+      known_unauthorized:
+        - "Alison (logged in AS Kimberly — shared credentials)."
+        - "Bobbie (prior accountant — forced/garbage reconciliations; see 'Bobby files for why he's gone' folder)."
+      mfa_required: true
+      closed_periods: []
